@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Treasure Hunt Game - Easy Mode</title>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        text-align: center;  
+        background-color: #a0d8f1;
+    }
+    h1 { margin-top: 20px; }
+    #game-board {
+        display: grid;
+        grid-template-columns: repeat(5, 80px);
+        grid-gap: 10px;
+        justify-content: center;
+        margin-top: 20px;
+    }
+    .cell {
+        width: 80px;
+        height: 80px;
+        background-color: #f2c94c;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+        cursor: pointer;
+        border-radius: 10px;
+        user-select: none;
+    }
+    .cell.found { background-color: #6fcf97; }
+    #message { margin-top: 20px; font-size: 18px; white-space: pre-line; }
+    #restart {
+        margin-top: 20px;
+        padding: 10px 20px;
+        font-size: 16px;
+        cursor: pointer;
+        border: none;
+        border-radius: 5px;
+        background-color: #56ccf2;
+        color: white;
+    }
+    a#instruction-link {
+        padding: 10px 20px;
+        background-color: #f2994a;
+        color: white;
+        text-decoration: none;
+        border-radius: 5px;
+        display: inline-block;
+        margin-top: 10px;
+    }
+</style>
+</head>
+<body>
+<h1>Treasure Hunt - Easy Mode</h1>
+<p>Click tiles to find treasures. Use hints and you have 5 chances!</p>
+<div id="game-board"></div>
+<div id="message"></div>
+<button id="restart">Restart Game</button>
+
+<!-- Added your ChatGPT link here -->
+<p>
+  <a id="instruction-link" href="https://chatgpt.com/share/68c8fa0b-09cc-800c-8964-3fc989a09f1a" target="_blank">
+    Game Instructions / Link
+  </a>
+</p>
+
+<script>
+const boardSize = 25; // 5x5 grid
+const treasures = [
+    { index: null, hint: "Look near the top-left corner" },
+    { index: null, hint: "Try somewhere near the center" },
+    { index: null, hint: "Check the bottom-right area" }
+];
+let foundCount = 0;
+let chances = 5;
+
+const board = document.getElementById('game-board');
+const message = document.getElementById('message');
+const restart = document.getElementById('restart');
+
+function startGame() {
+    board.innerHTML = '';
+    foundCount = 0;
+    chances = 5;
+    message.textContent = "Hints:\n" + treasures.map(t => "- " + t.hint).join("\n") + `\nChances left: ${chances}`;
+
+    // Randomly assign treasure positions
+    treasures[0].index = Math.floor(Math.random() * 6); // top-left 0-5
+    treasures[1].index = 12; // center
+    treasures[2].index = 19 + Math.floor(Math.random() * 6); // bottom-right 19-24
+
+    // Create grid
+    for (let i = 0; i < boardSize; i++) {
+        const cell = document.createElement('div');
+        cell.classList.add('cell');
+        cell.dataset.index = i;
+        cell.addEventListener('click', () => handleClick(cell, i));
+        board.appendChild(cell);
+    }
+}
+
+function handleClick(cell, index) {
+    if (cell.classList.contains('found') || chances === 0) return;
+
+    const treasure = treasures.find(t => t.index === index);
+    if (treasure) {
+        cell.textContent = '💰';
+        cell.classList.add('found');
+        foundCount++;
+        message.textContent = `You found a treasure! (${foundCount}/${treasures.length})\nChances left: ${chances}`;
+        if (foundCount === treasures.length) {
+            message.textContent = '🎉 Congratulations! You found all treasures!';
+        }
+    } else {
+        cell.textContent = '❌';
+        cell.style.backgroundColor = '#eb5757';
+        chances--;
+        // Show proximity hint
+        let nearestTreasure = treasures
+            .filter(t => !document.querySelector(`[data-index='${t.index}']`).classList.contains('found'))
+            .map(t => Math.abs(t.index - index));
+        let hint = "You're far from treasures!";
+        if (Math.min(...nearestTreasure) <= 2) hint = "You're very close to a treasure!";
+        else if (Math.min(...nearestTreasure) <= 5) hint = "You're somewhat near a treasure!";
+        message.textContent = `Wrong! ${hint}\nChances left: ${chances}`;
+        if (chances === 0) {
+            message.textContent += `\n💀 Game Over! Try again.`;
+        }
+    }
+}
+
+restart.addEventListener('click', startGame);
+startGame();
+</script>
+</body>
+</html>
