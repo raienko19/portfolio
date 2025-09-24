@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pirate Treasure Hunt</title>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        text-align: center;
+        background-color: #5c3a21;
+        color: #fff;
+        margin: 0;
+        padding: 0;
+    }
+    h1 {
+        margin: 10px 0;
+        color: gold;
+        text-shadow: 2px 2px black;
+    }
+    #legend {
+        background: #3d2615;
+        padding: 10px;
+        border-radius: 8px;
+        margin: 10px;
+        font-size: 15px;
+    }
+    #game-board {
+        display: grid;
+        gap: 8px;
+        justify-content: center;
+        margin: 20px auto;
+        max-width: 90vw;
+    }
+    .cell {
+        background: #8b5a2b;
+        border: 3px solid #4a2e16;
+        border-radius: 10px;
+        height: 16vw;
+        max-height: 80px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+        cursor: pointer;
+        user-select: none;
+        transition: transform 0.2s, background 0.3s;
+    }
+    .cell:hover {
+        transform: scale(1.05);
+    }
+    .cell.found {
+        background: #2d8659;
+        color: gold;
+    }
+    #message {
+        margin-top: 10px;
+        font-size: 18px;
+        white-space: pre-line;
+    }
+    #restart {
+        margin: 10px;
+        padding: 10px 20px;
+        font-size: 16px;
+        cursor: pointer;
+        border: none;
+        border-radius: 5px;
+        background-color: #d4af37;
+        color: black;
+        font-weight: bold;
+    }
+    #level {
+        margin-top: 5px;
+        font-size: 18px;
+        color: lightgreen;
+    }
+    #confetti-canvas {
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        pointer-events: none;
+    }
+</style>
+</head>
+<body>
+<h1>🏴‍☠️ Pirate Treasure Hunt 🪙</h1>
+<p id="level">Level 1 / 100</p>
+
+<div id="legend">
+    <b>Legend:</b><br>
+    💰 Common Treasure (mid hint)<br>
+    ⚱️ Uncommon Relic (easy hint)<br>
+    💎 Rare Gem (hard hint)<br>
+    ❌ Wrong spot<br>
+    🦀 Crab / Obstacle
+</div>
+
+<p id="instructions">
+    Click the wooden blocks to uncover a treasure.  
+    You have 3 chances per level.  
+    Each wrong move unlocks more hints!
+</p>
+
+<div id="game-board"></div>
+<div id="message"></div>
+<button id="restart">Restart Game</button>
+
+<canvas id="confetti-canvas"></canvas>
+
+<audio id="sound-treasure" src="https://cdn.pixabay.com/audio/2022/03/15/audio_06c1fb1e1f.mp3"></audio>
+<audio id="sound-wrong" src="https://cdn.pixabay.com/audio/2022/03/15/audio_f37b2e9a5b.mp3"></audio>
+<audio id="sound-win" src="https://cdn.pixabay.com/audio/2022/03/15/audio_1a9f41f9d8.mp3"></audio>
+
+<script>
+let currentLevel = 1;
+let maxLevels = 100;
+let boardSize = 25; // starts 5x5
+let chances = 3;
+let treasure = null;
+let hintIndex = 0;
+
+const board = document.getElementById('game-board');
+const message = document.getElementById('message');
+const restart = document.getElementById('restart');
+const levelText = document.getElementById('level');
+
+const soundTreasure = document.getElementById('sound-treasure');
+const soundWrong = document.getElementById('sound-wrong');
+const soundWin = document.getElementById('sound-win');
+
+function startGame() {
+    board.innerHTML = '';
+    message.textContent = '';
+    chances = 3;
+    hintIndex = 0;
+
+    // adjust difficulty by level
+    if (currentLevel > 20) boardSize = 36; // 6x6
+    if (currentLevel > 50) boardSize = 49; // 7x7
+    if (currentLevel > 80) boardSize = 64; // 8x8
+
+    const gridSide = Math.sqrt(boardSize);
+    board.style.gridTemplateColumns = `repeat(${gridSide}, 1fr)`;
+
+    // pick treasure rarity
+    const rarities = [
+        { rarity: "Uncommon", symbol: "⚱️", hints: [
+            "I sit in the first row.", 
+            "Closer to the top than bottom.", 
+            "Not far from the beginning."
+        ]},
+        { rarity: "Common", symbol: "💰", hints: [
+            "Row 3 might be lucky.",
+            "A spot near the center shines.",
+            "Think about doubling six."
+        ]},
+        { rarity: "Rare", symbol: "💎", hints: [
+            "Corners hide me well.",
+            "I guard the map’s edge.",
+            "Riddle: (n²-1) position holds me."
+        ]}
+    ];
+    treasure = rarities[Math.floor(Math.random() * rarities.length)];
+    treasure.index = Math.floor(Math.random() * boardSize);
+
+    // show first hint
+    message.textContent = `Hint (${treasure.rarity}): ${treasure.hints[hintIndex]}\nChances left: ${chances}`;
+
+    // build grid
+    for (let i = 0; i < boardSize; i++) {
+        const cell = document.createElement('div');
+        cell.classList.add('cell');
+        cell.dataset.index = i;
+        cell.addEventListener('click', () => handleClick(cell, i));
+        board.appendChild(cell);
+    }
+
+    levelText.textContent = `Level ${currentLevel} / ${maxLevels}`;
+}
+
+function handleClick(cell, index) {
+    if (cell.classList.contains('found') || chances <= 0) return;
+
+    if (index == treasure.index) {
+        cell.textContent = treasure.symbol;
+        cell.classList.add('found');
+        soundTreasure.play();
+        winLevel(treasure);
+    } else {
+        cell.textContent = Math.random() > 0.5 ? '❌' : '🦀';
+        cell.style.backgroundColor = '#7a2e2e';
+        chances--;
+        soundWrong.play();
+
+        // unlock next hint if available
+        if (hintIndex < treasure.hints.length - 1) {
+            hintIndex++;
+        }
+
+        // show all unlocked hints
+        let shownHints = treasure.hints.slice(0, hintIndex + 1).join("\n- ");
+        message.textContent = `Hints (${treasure.rarity}):\n- ${shownHints}\nChances left: ${chances}`;
+
+        if (chances === 0) {
+            message.textContent += "\n💀 You failed this level!";
+            const cells = document.querySelectorAll('.cell');
+            cells.forEach(c => c.replaceWith(c.cloneNode(true)));
+        }
+    }
+}
+
+function winLevel(treasure) {
+    message.textContent = `🎉 You found a ${treasure.rarity} Treasure ${treasure.symbol}!`;
+    soundWin.play();
+    launchConfetti();
+
+    const cells = document.querySelectorAll('.cell');
+    cells.forEach(c => c.replaceWith(c.cloneNode(true)));
+
+    if (currentLevel < maxLevels) {
+        setTimeout(() => {
+            currentLevel++;
+            startGame();
+        }, 3000);
+    } else {
+        message.textContent += "\n🏆 You completed all 100 levels!";
+    }
+}
+
+function launchConfetti() {
+    const canvas = document.getElementById('confetti-canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    const pieces = Array.from({ length: 100 }, () => ({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height - canvas.height,
+        r: Math.random() * 6 + 4,
+        d: Math.random() * 200 + 10,
+        color: `hsl(${Math.random() * 360},100%,50%)`
+    }));
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        pieces.forEach(p => {
+            ctx.fillStyle = p.color;
+            ctx.fillRect(p.x, p.y, p.r, p.r);
+        });
+        update();
+        requestAnimationFrame(draw);
+    }
+    function update() {
+        pieces.forEach(p => {
+            p.y += Math.cos(p.d) + 1 + p.r / 2;
+            p.x += Math.sin(p.d);
+            if (p.y > canvas.height) {
+                p.y = -10;
+                p.x = Math.random() * canvas.width;
+            }
+        });
+    }
+    draw();
+    setTimeout(() => ctx.clearRect(0, 0, canvas.width, canvas.height), 2500);
+}
+
+restart.addEventListener('click', () => {
+    currentLevel = 1;
+    boardSize = 25;
+    startGame();
+});
+
+startGame();
+</script>
+</body>
+</html>
